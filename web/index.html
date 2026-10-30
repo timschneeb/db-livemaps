@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zuglage – Live-GPS im DB-Netz</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="map"></div>
+
+  <header class="brand">
+    <div class="brand-mark">Z</div>
+    <div>
+      <h1>Zuglage</h1>
+      <p><span id="status">verbinde …</span></p>
+    </div>
+  </header>
+
+  <button id="panel-toggle" aria-label="Filter einblenden">Filter</button>
+
+  <aside id="panel">
+    <section class="stats">
+      <div><strong id="stat-shown">–</strong><span>Züge</span></div>
+      <div><strong id="stat-rate">–</strong><span>Meld./s</span></div>
+      <div><strong id="stat-evus">–</strong><span>EVUs</span></div>
+    </section>
+
+    <section>
+      <h2>Suche</h2>
+      <input id="search" type="search" placeholder="Linie, EVU, Start, Ziel …" autocomplete="off">
+    </section>
+
+    <section>
+      <h2>Produkt</h2>
+      <div class="chips" id="cats"></div>
+    </section>
+
+    <section class="stack">
+      <label>EVU
+        <select id="operator"><option value="">Alle EVUs</option></select>
+      </label>
+      <label>Region
+        <select id="region"><option value="">Ganz Deutschland</option></select>
+      </label>
+    </section>
+
+    <section class="switches">
+      <label><input type="checkbox" id="sensorOnly"> nur GPS-Sensordaten</label>
+      <label><input type="checkbox" id="allLines"> Linien aller Züge <span id="allLinesCount" class="switch-count"></span></label>
+      <label><input type="checkbox" id="trails"> Spuren der letzten Minuten</label>
+    </section>
+
+    <footer>
+      Daten: MQTT-Feed der DB-Verkehrslage · Karte © OpenStreetMap, CARTO<br>
+      Klick auf einen Zug lädt seine Strecke.
+    </footer>
+  </aside>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/app.js"></script>
+</body>
+</html>

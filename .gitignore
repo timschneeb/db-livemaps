@@ -1,0 +1,12 @@
+.venv/
+cache/
+chrome-data/
+positions.jsonl
+__pycache__/
+*.pyc
+
+# lokale Entwicklungsumgebung
+AGENTS.md
+launch-chrome.sh
+.DS_Store
+*.kate-swp
