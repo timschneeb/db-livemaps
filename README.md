@@ -19,3 +19,13 @@ Dump data without server:
 ```bash
 python3 probe/gps_dump.py --duration 60 --out positions.jsonl
 ```
+
+## Deployment
+
+```bash
+./deploy/deploy.sh [ssh-host]   # default: srv1.timschneeberger.me
+```
+
+Copies the app to `/opt/ris-map/app`, creates the virtualenv, installs the
+systemd unit `ris-map.service` and restarts it. The service listens on
+`0.0.0.0:8011`; the unit lives in `deploy/ris-map.service`.

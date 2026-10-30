@@ -1,0 +1,30 @@
+[Unit]
+Description=Zuglage - Live-Karte aller Zuege im DB-Netz
+Documentation=https://github.com/timschneeb/ris-zugkarte
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tim
+Group=tim
+WorkingDirectory=/opt/ris-map/app
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/ris-map/app/.venv/bin/uvicorn server:app --host 0.0.0.0 --port 8011
+# Ein Absturz darf die Karte nicht offline lassen; manuelle Stops bleiben moeglich.
+Restart=always
+RestartSec=5
+
+# Der Dienst braucht nur ausgehendes MQTT/HTTPS und den Cache im App-Verzeichnis.
+MemoryHigh=512M
+MemoryMax=768M
+CPUQuota=100%
+Nice=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ris-map
+
+[Install]
+WantedBy=multi-user.target
