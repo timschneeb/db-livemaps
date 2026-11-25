@@ -85,6 +85,11 @@ async def positions():
     return {"stats": store.stats(), "positions": store.snapshot()}
 
 
+@app.get("/api/trails")
+async def trails():
+    return {"trails": store.trails()}
+
+
 @app.get("/api/regions")
 async def regions():
     ou = await run_in_threadpool(rest.organizational_units)

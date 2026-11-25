@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
 
 import config
+
+
+def _dist_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Grobe Entfernung in Metern (ausreichend fuer Spur-Sampling)."""
+    dlat = (lat2 - lat1) * 111_320.0
+    dlon = (lon2 - lon1) * 111_320.0 * math.cos(math.radians((lat1 + lat2) / 2))
+    return math.hypot(dlat, dlon)
 
 
 @dataclass
@@ -26,6 +34,8 @@ class Position:
     source: str | None = None
     administrations: list[str] = field(default_factory=list)
     updated: float = field(default_factory=time.time)
+    # (timestamp, lat, lon) - aeltere Punkte werden beim Lesen verworfen.
+    trail: deque = field(default_factory=lambda: deque(maxlen=config.TRAIL_POINTS))
 
     def as_dict(self, now: float) -> dict:
         return {
@@ -102,6 +112,19 @@ class Store:
 
         now = time.time()
         with self._lock:
+            old = self._positions.get(jid)
+            if old is not None:
+                # Historie uebernehmen: jede Nachricht erzeugt ein neues Objekt.
+                pos.trail = old.trail
+            if not pos.trail:
+                pos.trail.append((now, pos.lat, pos.lon))
+            else:
+                ts, tlat, tlon = pos.trail[-1]
+                if now - ts >= config.TRAIL_SAMPLE_SECONDS or _dist_m(
+                    tlat, tlon, pos.lat, pos.lon
+                ) >= config.TRAIL_MIN_METERS:
+                    pos.trail.append((now, pos.lat, pos.lon))
+
             self._positions[jid] = pos
             self.messages += 1
             self._msg_times.append(now)
@@ -121,14 +144,40 @@ class Store:
         with self._lock:
             return [p.as_dict(now) for p in self._positions.values() if p.updated >= cutoff]
 
+    def trails(self) -> dict[str, list[list[float]]]:
+        """Spuren aller aktiven Zuege als {journeyID: [[lat, lon], ...]}."""
+        now = time.time()
+        cutoff = now - config.TRAIL_SECONDS
+        out: dict[str, list[list[float]]] = {}
+        with self._lock:
+            for jid, p in self._positions.items():
+                if p.updated < now - config.STALE_SECONDS:
+                    continue
+                pts = [
+                    [round(lat, 5), round(lon, 5)]
+                    for ts, lat, lon in p.trail
+                    if ts >= cutoff
+                ]
+                cur = [round(p.lat, 5), round(p.lon, 5)]
+                if not pts or pts[-1] != cur:
+                    pts.append(cur)
+                if len(pts) >= 2:
+                    out[jid] = pts
+        return out
+
     def stats(self) -> dict:
         now = time.time()
         with self._lock:
             recent = [t for t in self._msg_times if t >= now - 10]
             count = len(self._positions)
             last = self.last_message
+            # Der MQTT-Client reconnectet intern, ohne on_connect erneut zu
+            # melden. Fliesen weiter Daten, gilt der Feed trotzdem als live.
+            connected = self.connected or (
+                last is not None and now - last < 30
+            )
         return {
-            "connected": self.connected,
+            "connected": connected,
             "messages": self.messages,
             "msg_per_s": round(len(recent) / 10, 1),
             "journeys": count,

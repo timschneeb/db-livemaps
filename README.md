@@ -14,6 +14,10 @@ python3 -m venv .venv
 
 Then open <http://127.0.0.1:8000>.
 
+Der Standort-Button (unten links) nutzt die Browser-Geolocation. Browser
+erlauben das nur auf `localhost` oder über HTTPS – auf einer reinen
+HTTP-Adresse im LAN zeigt die App einen entsprechenden Hinweis.
+
 Dump data without server:
 
 ```bash

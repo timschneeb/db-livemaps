@@ -42,7 +42,7 @@ L.tileLayer(
   }
 ).addTo(map);
 
-L.control.zoom({ position: "bottomright" }).addTo(map);
+L.control.zoom({ position: "bottomleft" }).addTo(map);
 
 const routePane = map.createPane("routes");
 /* Unter der Marker-Leinwand (overlayPane = 400), damit der angefahrene
@@ -61,6 +61,12 @@ thinPane.style.zIndex = 340;
 thinPane.style.pointerEvents = "none";
 const thinRenderer = L.canvas({ pane: "thinroutes", padding: 0.35 });
 const thinLayer = L.layerGroup().addTo(map);
+
+/* Spuren – unter den Markern, aber über den dünnen Linien. */
+const trailPane = map.createPane("trails");
+trailPane.style.zIndex = 345;
+trailPane.style.pointerEvents = "none";
+const trailRenderer = L.canvas({ pane: "trails", padding: 0.4 });
 
 const state = {
   positions: new Map(),
@@ -310,11 +316,13 @@ function ensureMarker(p) {
 
 function applySnapshot(positions) {
   const seen = new Set();
+  const live = new Set();
   let evus = new Set();
   const recvAt = Date.now();
 
   for (const p of positions) {
     p._at = recvAt;
+    live.add(p.id);
     state.positions.set(p.id, p);
     if (!matches(p)) continue;
     seen.add(p.id);
@@ -323,6 +331,9 @@ function applySnapshot(positions) {
     updateTrail(p);
   }
 
+  /* Fahrten, die nicht mehr im Snapshot stehen, komplett entfernen.
+     Sonst wachsen Marker-/Spur-Speicher unbegrenzt und alte Spuren
+     bleiben als Geister auf der Karte. */
   for (const [id, marker] of state.markers) {
     if (!seen.has(id)) {
       markersLayer.removeLayer(marker);
@@ -331,8 +342,12 @@ function applySnapshot(positions) {
       if (line) { trailsLayer.removeLayer(line); state.trailLines.delete(id); }
     }
   }
-  for (const id of state.trails.keys()) {
-    if (!state.positions.has(id)) state.trails.delete(id);
+  for (const id of [...state.positions.keys()]) {
+    if (live.has(id)) continue;
+    state.positions.delete(id);
+    state.trails.delete(id);
+    const line = state.trailLines.get(id);
+    if (line) { trailsLayer.removeLayer(line); state.trailLines.delete(id); }
   }
 
   el.shown.textContent = seen.size;
@@ -361,26 +376,91 @@ function applySnapshot(positions) {
 /* Spuren                                                              */
 /* ------------------------------------------------------------------ */
 
+const TRAIL_MAX_POINTS = 60;
+let trailPollTimer = null;
+
+function trailStyle(p) {
+  return {
+    pane: "trails",
+    renderer: trailRenderer,
+    color: colorFor(p),
+    weight: 2,
+    opacity: 0.55,
+    interactive: false,
+  };
+}
+
 function updateTrail(p) {
   const trail = state.trails.get(p.id) || [];
   const last = trail[trail.length - 1];
   if (!last || Math.abs(last[0] - p.lat) > 1e-4 || Math.abs(last[1] - p.lon) > 1e-4) {
     trail.push([p.lat, p.lon]);
-    if (trail.length > 30) trail.shift();
+    if (trail.length > TRAIL_MAX_POINTS) trail.shift();
     state.trails.set(p.id, trail);
   }
   if (!state.filter.trails) return;
 
   let line = state.trailLines.get(p.id);
   if (!line) {
-    line = L.polyline(trail, {
-      renderer: canvasRenderer, color: colorFor(p), weight: 2, opacity: 0.4,
-      interactive: false,
-    }).addTo(trailsLayer);
+    if (trail.length < 2) return;
+    line = L.polyline(trail, trailStyle(p)).addTo(trailsLayer);
     state.trailLines.set(p.id, line);
-  } else if (trail.length > 1) {
+  } else {
     line.setLatLngs(trail);
-    line.setStyle({ color: colorFor(p) });
+    line.setStyle(trailStyle(p));
+  }
+}
+
+/* Der Server haelt die Spur-Historie (letzte 15 Minuten). Damit sind Spuren
+   sofort nach dem Laden sichtbar und lang genug fuer den Ueberblickszoom. */
+async function loadTrails() {
+  if (!state.filter.trails) return;
+  try {
+    const res = await fetch("/api/trails");
+    if (!res.ok) return;
+    const data = await res.json();
+    for (const [id, pts] of Object.entries(data.trails || {})) {
+      if (!Array.isArray(pts) || pts.length < 2) continue;
+      const trail = pts
+        .filter((c) => Array.isArray(c) && c.length >= 2)
+        .map(([lat, lon]) => [lat, lon]);
+      const p = state.positions.get(id);
+      if (p) {
+        const tail = trail[trail.length - 1];
+        if (tail[0] !== p.lat || tail[1] !== p.lon) trail.push([p.lat, p.lon]);
+      }
+      state.trails.set(id, trail.slice(-TRAIL_MAX_POINTS));
+    }
+  } catch { /* Spuren sind optional */ }
+  if (state.filter.trails) syncTrailLines();
+}
+
+function syncTrailLines() {
+  if (!state.filter.trails) return;
+  for (const [id, line] of state.trailLines) {
+    const p = state.positions.get(id);
+    const trail = state.trails.get(id);
+    if (!p || !matches(p) || !trail || trail.length < 2) {
+      trailsLayer.removeLayer(line);
+      state.trailLines.delete(id);
+    }
+  }
+  for (const [id, p] of state.positions) {
+    const trail = state.trails.get(id);
+    if (!matches(p) || !trail || trail.length < 2) continue;
+    updateTrail(p);
+  }
+}
+
+function startTrailPolling() {
+  stopTrailPolling();
+  trailPollTimer = setInterval(loadTrails, 20000);
+}
+
+function stopTrailPolling() {
+  if (trailPollTimer) {
+    clearInterval(trailPollTimer);
+    trailPollTimer = null;
   }
 }
 
@@ -548,6 +628,7 @@ function clearThinLines() {
 
 function setStatus(kind, text) {
   el.status.textContent = text;
+  el.status.className = kind || "";
 }
 
 /* ------------------------------------------------------------------ */
@@ -573,8 +654,11 @@ function connect() {
     if (msg.type === "snapshot" || msg.type === "hello") {
       if (msg.stats) {
         el.rate.textContent = msg.stats.msg_per_s ?? "–";
-        if (msg.stats.connected === false) setStatus("lost", "Feed getrennt");
-        else setStatus("live", "live verbunden");
+        // Datenfluss ist das verlaesslichste Signal: paho reconnectet
+        // teils ohne erneutes on_connect, dann haengt das Flag auf false.
+        const flowing = msg.stats.last_message_age != null && msg.stats.last_message_age < 30;
+        if (msg.stats.connected || flowing) setStatus("live", "live verbunden");
+        else setStatus("lost", "Feed getrennt");
       }
       applySnapshot(msg.positions || []);
     }
@@ -658,8 +742,14 @@ el.allLines.addEventListener("change", () => {
 
 el.trails.addEventListener("change", () => {
   state.filter.trails = el.trails.checked;
-  if (!el.trails.checked) clearTrails();
-  else reprocess();
+  if (!el.trails.checked) {
+    stopTrailPolling();
+    clearTrails();
+  } else {
+    reprocess();
+    loadTrails();
+    startTrailPolling();
+  }
 });
 
 el.panelToggle.addEventListener("click", () => el.panel.classList.toggle("open"));
@@ -701,6 +791,133 @@ setInterval(refreshPopupMeta, 1000);
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") map.closePopup();
 });
+
+/* ------------------------------------------------------------------ */
+/* Eigener Standort                                                    */
+/* ------------------------------------------------------------------ */
+
+const locate = { watchId: null, marker: null, circle: null, first: true };
+let toastTimer = null;
+
+function toast(text, ms = 4500) {
+  const t = $("toast");
+  if (!t) return;
+  t.textContent = text;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), ms);
+}
+
+const LocateControl = L.Control.extend({
+  options: { position: "bottomleft" },
+  onAdd() {
+    const wrap = L.DomUtil.create("div", "leaflet-bar locate-control");
+    const btn = L.DomUtil.create("a", "", wrap);
+    btn.href = "#";
+    btn.title = "Eigene Position anzeigen";
+    btn.setAttribute("role", "button");
+    btn.setAttribute("aria-label", "Eigene Position anzeigen");
+    btn.innerHTML =
+      '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">' +
+      '<path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A9.01 ' +
+      '9.01 0 0 0 13 3.06V1h-2v2.06A9.01 9.01 0 0 0 3.06 11H1v2h2.06A9.01 9.01 0 0 ' +
+      '0 11 20.94V23h2v-2.06A9.01 9.01 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 ' +
+      '0-14 7 7 0 0 1 0 14z"/></svg>';
+    this._btn = btn;
+    L.DomEvent.disableClickPropagation(wrap);
+    L.DomEvent.disableScrollPropagation(wrap);
+    L.DomEvent.on(btn, "click", (e) => {
+      L.DomEvent.preventDefault(e);
+      toggleLocate();
+    });
+    return wrap;
+  },
+  setActive(on) {
+    if (this._btn) this._btn.classList.toggle("active", Boolean(on));
+  },
+});
+
+const locateControl = new LocateControl().addTo(map);
+
+function onLocation(pos) {
+  const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+  if (!locate.marker) {
+    locate.circle = L.circle([lat, lon], {
+      radius: accuracy,
+      color: "#2563eb",
+      weight: 1,
+      opacity: 0.45,
+      fillColor: "#2563eb",
+      fillOpacity: 0.1,
+      interactive: false,
+    }).addTo(map);
+    locate.marker = L.circleMarker([lat, lon], {
+      radius: 7,
+      weight: 2.5,
+      color: "#ffffff",
+      fillColor: "#2563eb",
+      fillOpacity: 1,
+    }).addTo(map);
+  } else {
+    locate.marker.setLatLng([lat, lon]);
+    locate.circle.setLatLng([lat, lon]).setRadius(accuracy);
+  }
+  if (locate.first) {
+    locate.first = false;
+    map.setView([lat, lon], Math.max(map.getZoom(), 13), { animate: true });
+    toast("Standort gefunden.");
+  }
+}
+
+function onLocationError(err) {
+  const text =
+    err && err.code === 1
+      ? "Standortfreigabe wurde verweigert."
+      : err && err.code === 3
+        ? "Standortbestimmung dauert zu lange."
+        : "Standort konnte nicht bestimmt werden.";
+  toast(text);
+  stopLocate();
+}
+
+function stopLocate() {
+  if (locate.watchId != null && navigator.geolocation) {
+    navigator.geolocation.clearWatch(locate.watchId);
+  }
+  locate.watchId = null;
+  locate.first = true;
+  locateControl.setActive(false);
+  if (locate.marker) {
+    map.removeLayer(locate.marker);
+    locate.marker = null;
+  }
+  if (locate.circle) {
+    map.removeLayer(locate.circle);
+    locate.circle = null;
+  }
+}
+
+function toggleLocate() {
+  if (locate.watchId != null) {
+    stopLocate();
+    return;
+  }
+  if (!navigator.geolocation) {
+    toast("Dieser Browser unterstützt keine Standortbestimmung.");
+    return;
+  }
+  if (window.isSecureContext === false) {
+    toast("Standort braucht HTTPS (oder localhost).");
+    return;
+  }
+  locate.first = true;
+  locateControl.setActive(true);
+  locate.watchId = navigator.geolocation.watchPosition(
+    onLocation,
+    onLocationError,
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 },
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Start                                                               */

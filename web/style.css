@@ -68,6 +68,71 @@ html, body {
   color: var(--muted);
 }
 
+#status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3b8;
+  flex: none;
+}
+
+#status.live { color: var(--ok); }
+#status.live::before { background: var(--ok); }
+#status.lost { color: var(--accent); }
+#status.lost::before { background: var(--accent); }
+
+/* ---------- Standort / Toasts ---------- */
+.locate-control {
+  border: none !important;
+  box-shadow: var(--shadow) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+}
+
+.locate-control a {
+  display: grid !important;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--ink) !important;
+  background: #fff !important;
+}
+
+.locate-control a.active {
+  color: #fff !important;
+  background: #2563eb !important;
+}
+
+#toast {
+  position: absolute;
+  z-index: 1200;
+  left: 50%;
+  bottom: 24px;
+  transform: translate(-50%, 12px);
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 16px;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.92);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s, transform 0.18s;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
 /* ---------- Panel ---------- */
 #panel {
   position: absolute;

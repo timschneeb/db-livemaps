@@ -51,9 +51,11 @@ class Feed(threading.Thread):
 
             def on_connect(c, userdata, flags, rc, _client=client):
                 if rc == 0:
+                    self.store.connected = True
                     log.info("MQTT verbunden, abonniere %s", config.MQTT_TOPIC)
                     c.subscribe(config.MQTT_TOPIC, qos=0)
                 else:
+                    self.store.connected = False
                     log.error("MQTT-Verbindung abgelehnt (rc=%s)", rc)
 
             def on_subscribe(c, userdata, mid, granted_qos):
