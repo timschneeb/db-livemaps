@@ -75,6 +75,16 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Zuglage", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def revalidate_frontend(request, call_next):
+    """HTML/JS/CSS immer revalidieren, damit Deploys nicht an Caches hängen."""
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith((".html", ".js", ".css")):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
+
 @app.get("/api/health")
 async def health():
     return {"ok": True, "stats": store.stats()}

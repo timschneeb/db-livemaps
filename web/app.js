@@ -809,7 +809,7 @@ function toast(text, ms = 4500) {
 }
 
 const LocateControl = L.Control.extend({
-  options: { position: "bottomleft" },
+  options: { position: "topright" },
   onAdd() {
     const wrap = L.DomUtil.create("div", "leaflet-bar locate-control");
     const btn = L.DomUtil.create("a", "", wrap);
