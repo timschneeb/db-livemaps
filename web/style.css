@@ -297,6 +297,10 @@ input[type="search"]:focus, select:focus {
 }
 
 /* ---------- Karte ---------- */
+.train-labels {
+  pointer-events: none;
+}
+
 .leaflet-control-zoom {
   border: none !important;
   box-shadow: var(--shadow) !important;

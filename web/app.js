@@ -79,6 +79,17 @@ locationPane.style.zIndex = 390;
 locationPane.style.pointerEvents = "none";
 const locationRenderer = L.canvas({ pane: "location" });
 
+/* Zugnamen und Geschwindigkeit – über den Markern, aber ohne Klicks zu
+   fangen. Wird als eigene Leinwand gezeichnet, damit hunderte Labels nicht
+   als DOM-Elemente an jedem Marker hängen. */
+const labelPane = map.createPane("labels");
+labelPane.style.zIndex = 405;
+labelPane.style.pointerEvents = "none";
+const labelCanvas = document.createElement("canvas");
+labelCanvas.className = "train-labels leaflet-zoom-hide";
+labelPane.appendChild(labelCanvas);
+const labelCtx = labelCanvas.getContext("2d");
+
 const state = {
   positions: new Map(),
   markers: new Map(),
@@ -298,6 +309,117 @@ function radiusForZoom() {
   return 6;
 }
 
+/* ------------------------------------------------------------------ */
+/* Zugnamen an den Punkten                                             */
+/* ------------------------------------------------------------------ */
+
+/* Erst ab dieser Stufe ist genug Platz zwischen den Punkten, und erst
+   dann sind die Namen überhaupt lesbar. */
+const LABEL_MIN_ZOOM = 10;
+const LABEL_MAX = 90;
+const LABEL_FONT_NAME = '600 11px system-ui, -apple-system, "Segoe UI", sans-serif';
+const LABEL_FONT_SPEED = '500 10px system-ui, -apple-system, "Segoe UI", sans-serif';
+let labelFrame = 0;
+
+function scheduleLabels() {
+  if (labelFrame) return;
+  labelFrame = requestAnimationFrame(() => {
+    labelFrame = 0;
+    drawLabels();
+  });
+}
+
+function drawLabels() {
+  const size = map.getSize();
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const pw = Math.round(size.x * dpr);
+  const ph = Math.round(size.y * dpr);
+  if (labelCanvas.width !== pw || labelCanvas.height !== ph) {
+    labelCanvas.width = pw;
+    labelCanvas.height = ph;
+    labelCanvas.style.width = `${size.x}px`;
+    labelCanvas.style.height = `${size.y}px`;
+  }
+  L.DomUtil.setPosition(labelCanvas, map.containerPointToLayerPoint([0, 0]));
+  labelCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  labelCtx.clearRect(0, 0, size.x, size.y);
+  if (map.getZoom() < LABEL_MIN_ZOOM) return;
+
+  const cx = size.x / 2;
+  const cy = size.y / 2;
+  const items = [];
+  for (const p of state.positions.values()) {
+    if (!matches(p)) continue;
+    const pt = map.latLngToContainerPoint([p.lat, p.lon]);
+    if (pt.x < -20 || pt.y < -20 || pt.x > size.x + 20 || pt.y > size.y + 20) continue;
+    items.push({ p, x: pt.x, y: pt.y, d: (pt.x - cx) ** 2 + (pt.y - cy) ** 2 });
+  }
+  /* In der Mitte zuerst, damit bei Platzmangel die sichtbarsten Namen
+     gewinnen und nicht zufällig die am Kartenrand. */
+  items.sort((a, b) => a.d - b.d);
+
+  const boxes = [];
+  let drawn = 0;
+  const r = radiusForZoom();
+
+  labelCtx.textBaseline = "middle";
+  labelCtx.lineJoin = "round";
+
+  for (const it of items) {
+    if (drawn >= LABEL_MAX) break;
+    const name = it.p.line || it.p.cat || "Zug";
+    const speed = it.p.spd != null ? `${it.p.spd} km/h` : "";
+
+    labelCtx.font = LABEL_FONT_NAME;
+    const nameW = labelCtx.measureText(name).width;
+    labelCtx.font = LABEL_FONT_SPEED;
+    const speedW = speed ? labelCtx.measureText(speed).width : 0;
+    const gap = speed ? 4 : 0;
+    const boxW = nameW + gap + speedW + 6;
+    const boxH = 14;
+
+    /* Rechts neben den Punkt; wenn dort kein Platz ist, nach links. */
+    let x = it.x + r + 5;
+    if (x + boxW > size.x - 4) x = it.x - r - 5 - boxW;
+    if (x < 2) continue;
+    const y = it.y - boxH / 2;
+
+    /* Genug Platz heißt: kein anderer Zug und kein anderes Label im Weg. */
+    let blocked = false;
+    for (const other of items) {
+      if (other === it) continue;
+      if (other.x > x - 3 && other.x < x + boxW + 3 &&
+          other.y > y - 3 && other.y < y + boxH + 3) {
+        blocked = true;
+        break;
+      }
+    }
+    if (blocked) continue;
+    if (boxes.some((b) =>
+      x < b.x + b.w + 3 && x + boxW + 3 > b.x &&
+      y < b.y + b.h + 3 && y + boxH + 3 > b.y)) continue;
+
+    boxes.push({ x, y, w: boxW, h: boxH });
+    drawn++;
+
+    /* Weißer Halo hält den Namen auch auf hellen Karten lesbar. */
+    let tx = x + 3;
+    labelCtx.font = LABEL_FONT_NAME;
+    labelCtx.lineWidth = 3;
+    labelCtx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+    labelCtx.strokeText(name, tx, it.y);
+    labelCtx.fillStyle = "#0f172a";
+    labelCtx.fillText(name, tx, it.y);
+    if (speed) {
+      tx += nameW + gap;
+      labelCtx.font = LABEL_FONT_SPEED;
+      labelCtx.strokeText(speed, tx, it.y);
+      labelCtx.fillStyle = "#475569";
+      labelCtx.fillText(speed, tx, it.y);
+    }
+  }
+}
+
 function ensureMarker(p) {
   let m = state.markers.get(p.id);
   if (!m) {
@@ -390,6 +512,7 @@ function applySnapshot(positions) {
   }
   syncThinLines();
   refreshPopupMeta();
+  scheduleLabels();
 }
 
 /* ------------------------------------------------------------------ */
@@ -777,7 +900,11 @@ el.panelToggle.addEventListener("click", () => el.panel.classList.toggle("open")
 map.on("zoomend", () => {
   const r = radiusForZoom();
   for (const m of state.markers.values()) m.setRadius(r);
+  scheduleLabels();
 });
+
+/* Labels mit der Karte mitschieben (Pan) und bei Größenänderung neu setzen. */
+map.on("move resize", scheduleLabels);
 
 map.on("popupclose", () => {
   // Popup geschlossen (Karte angeklickt oder andere Fahrt) -> Strecke weg.
