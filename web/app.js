@@ -661,7 +661,7 @@ function connect() {
     try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg.type === "snapshot" || msg.type === "hello") {
       if (msg.stats) {
-        el.rate.textContent = msg.stats.msg_per_s ?? "–";
+        el.rate.textContent = msg.stats.msg_per_s ?? "…";
         // Datenfluss ist das verlaesslichste Signal: paho reconnectet
         // teils ohne erneutes on_connect, dann haengt das Flag auf false.
         const flowing = msg.stats.last_message_age != null && msg.stats.last_message_age < 30;
@@ -673,7 +673,7 @@ function connect() {
   };
 
   socket.onclose = () => {
-    setStatus("lost", "Verbindung verloren – neu verbinden …");
+    setStatus("lost", "Verbindung verloren");
     setTimeout(connect, 2500);
   };
 
