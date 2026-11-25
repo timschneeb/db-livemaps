@@ -315,7 +315,7 @@ function radiusForZoom() {
 
 /* Erst ab dieser Stufe ist genug Platz zwischen den Punkten, und erst
    dann sind die Namen überhaupt lesbar. */
-const LABEL_MIN_ZOOM = 10;
+const LABEL_MIN_ZOOM = 7;
 const LABEL_MAX = 90;
 const LABEL_FONT_NAME = '600 11px system-ui, -apple-system, "Segoe UI", sans-serif';
 const LABEL_FONT_SPEED = '500 10px system-ui, -apple-system, "Segoe UI", sans-serif';
