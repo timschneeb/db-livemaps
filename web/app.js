@@ -68,6 +68,14 @@ trailPane.style.zIndex = 345;
 trailPane.style.pointerEvents = "none";
 const trailRenderer = L.canvas({ pane: "trails", padding: 0.4 });
 
+/* Eigener Standort – unter den Markern und ohne Klickfänger. Sonst legt
+   Leaflet für den Genauigkeitskreis eine zweite Leinwand über die Marker
+   und schluckt alle Klicks. */
+const locationPane = map.createPane("location");
+locationPane.style.zIndex = 390;
+locationPane.style.pointerEvents = "none";
+const locationRenderer = L.canvas({ pane: "location" });
+
 const state = {
   positions: new Map(),
   markers: new Map(),
@@ -843,6 +851,8 @@ function onLocation(pos) {
   const { latitude: lat, longitude: lon, accuracy } = pos.coords;
   if (!locate.marker) {
     locate.circle = L.circle([lat, lon], {
+      pane: "location",
+      renderer: locationRenderer,
       radius: accuracy,
       color: "#2563eb",
       weight: 1,
@@ -852,11 +862,14 @@ function onLocation(pos) {
       interactive: false,
     }).addTo(map);
     locate.marker = L.circleMarker([lat, lon], {
+      pane: "location",
+      renderer: locationRenderer,
       radius: 7,
       weight: 2.5,
       color: "#ffffff",
       fillColor: "#2563eb",
       fillOpacity: 1,
+      interactive: false,
     }).addTo(map);
   } else {
     locate.marker.setLatLng([lat, lon]);
