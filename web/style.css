@@ -110,6 +110,15 @@ html, body {
   background: #2563eb !important;
 }
 
+/* Karten-Controls nicht hinter dem Panel bzw. dem Filter-Button verstecken */
+@media (min-width: 861px) {
+  .leaflet-top.leaflet-right { right: 352px; }
+}
+
+@media (max-width: 860px) {
+  .leaflet-top.leaflet-right { top: 56px; }
+}
+
 #toast {
   position: absolute;
   z-index: 1200;
