@@ -303,10 +303,10 @@ function tooltipFor(p) {
 
 function radiusForZoom() {
   const z = map.getZoom();
-  if (z <= 6) return 3.2;
-  if (z <= 8) return 4.2;
-  if (z <= 10) return 5.2;
-  return 6;
+  if (z <= 6) return 4.2;
+  if (z <= 8) return 5.2;
+  if (z <= 10) return 6.2;
+  return 7.2;
 }
 
 /* ------------------------------------------------------------------ */
