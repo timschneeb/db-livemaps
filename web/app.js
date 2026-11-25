@@ -30,6 +30,9 @@ const CATS = [
 const map = L.map("map", { zoomControl: false, preferCanvas: true })
   .setView([51.16, 10.45], 6);
 
+/* Nur auf Geräten mit echten Hover-Eingaben Tooltips anbinden. */
+const canHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
 /* CARTO Positron (light) – kostenloser Key, max. 5 Mio. Kacheln/Monat. */
 const CARTO_KEY = "cb1_4yqg_1_dacebb987b5343904b8ec78b";
 L.tileLayer(
@@ -306,11 +309,20 @@ function ensureMarker(p) {
       fillColor: colorFor(p),
       fillOpacity: 0.95,
     });
-    m.bindTooltip(() => tooltipFor(state.positions.get(p.id) || p), {
-      direction: "top", offset: [0, -4], opacity: 0.9,
-    });
+    if (canHover) {
+      m.bindTooltip(() => tooltipFor(state.positions.get(p.id) || p), {
+        direction: "top", offset: [0, -4], opacity: 0.9,
+      });
+    }
     m.bindPopup(() => popupHtml(state.positions.get(p.id)), {
       closeButton: false, offset: [0, -2], maxWidth: 280,
+    });
+    /* Auf Touch-Geräten öffnet der Tap sonst Tooltip und Popup gleichzeitig.
+       Leaflet öffnet den Tooltip per eigenem Click-Handler; deshalb verzögert
+       schließen, damit er nach dem Popup nicht wieder erscheint. */
+    m.on("popupopen", () => {
+      m.closeTooltip();
+      setTimeout(() => m.closeTooltip(), 0);
     });
     m.on("click", () => loadRoute(p.id));
     m.addTo(markersLayer);
