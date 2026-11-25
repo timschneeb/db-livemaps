@@ -112,11 +112,13 @@ html, body {
 
 /* Karten-Controls nicht hinter dem Panel bzw. dem Filter-Button verstecken */
 @media (min-width: 861px) {
-  .leaflet-top.leaflet-right { right: 352px; }
+  /* 16px Abstand zur Sidebar und 16px zum oberen Rand (Leaflet-Control hat 10px Margin) */
+  .leaflet-top.leaflet-right { top: 6px; right: 342px; }
 }
 
 @media (max-width: 860px) {
-  .leaflet-top.leaflet-right { top: 56px; }
+  /* rechtsbündig zum Filter-Button, 16px darunter */
+  .leaflet-top.leaflet-right { top: 56px; right: 6px; }
 }
 
 #toast {
