@@ -342,6 +342,8 @@ input[type="search"]:focus, select:focus {
 
 .pop-hint { margin-top: 8px; font-size: 11px; color: #94a3b8; }
 
+.pop-hint:empty { display: none; }
+
 .pop-hint.err { color: var(--accent); }
 
 #panel-toggle {

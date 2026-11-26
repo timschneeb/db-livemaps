@@ -28,7 +28,7 @@ const CATS = [
 ];
 
 const map = L.map("map", { zoomControl: false, preferCanvas: true })
-  .setView([51.16, 10.45], 7);
+  .setView([51.16, 10.45], 6);
 
 /* Nur auf Geräten mit echten Hover-Eingaben Tooltips anbinden. */
 const canHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -236,9 +236,7 @@ function popupHtml(p) {
       <span>${p.src === "SENSOR" ? "GPS" : "geschätzt"}</span>
       <span class="pop-age" data-id="${esc(p.id)}">${ageLabel(p)}</span>
     </div>
-    <div class="pop-hint" id="hint-${esc(p.id)}">${
-      state.routeId === p.id ? "Strecke angezeigt" : "Strecke wird geladen …"
-    }</div>`;
+    <div class="pop-hint" id="hint-${esc(p.id)}"></div>`;
 }
 
 async function loadRoute(id) {
@@ -252,7 +250,7 @@ async function loadRoute(id) {
     hint.className = "pop-hint" + (isError ? " err" : "");
     hint.textContent = text;
   };
-  setHint("Strecke wird geladen …");
+  setHint("");
 
   try {
     const res = await fetch(`/api/geometry/${encodeURIComponent(id)}`);
@@ -260,7 +258,6 @@ async function loadRoute(id) {
     const geo = await res.json();
     if (state.routeId !== id) return;
     drawRoute(geo.coordinates, colorFor(p || {}));
-    setHint("Strecke angezeigt");
   } catch (err) {
     if (state.routeId === id) state.routeId = null;
     setHint(`Keine Streckendaten (${err.message})`, true);
