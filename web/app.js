@@ -27,6 +27,28 @@ const CATS = [
   { key: "OTHER", label: "Sonstige" },
 ];
 
+/* Auf GitHub Pages liegt nur das Frontend; API und Feed laufen weiter auf
+   db-map.timschneeberger.me. Lokal und auf dem Backend bleiben die Pfade
+   relativ. `?api=https://…` eignet sich zum Testen einer anderen API. */
+const API_BASE = (
+  new URLSearchParams(location.search).get("api") ||
+  (location.hostname.endsWith("github.io") ? "https://db-map.timschneeberger.me" : "")
+).replace(/\/+$/, "");
+
+function apiUrl(path) {
+  return API_BASE ? `${API_BASE}${path}` : path;
+}
+
+function websocketUrl() {
+  if (API_BASE) {
+    const base = new URL(API_BASE);
+    const proto = base.protocol === "https:" ? "wss" : "ws";
+    return `${proto}://${base.host}/ws`;
+  }
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${location.host}/ws`;
+}
+
 const map = L.map("map", { zoomControl: false, preferCanvas: true })
   .setView([51.16, 10.45], 6);
 
@@ -253,7 +275,7 @@ async function loadRoute(id) {
   setHint("");
 
   try {
-    const res = await fetch(`/api/geometry/${encodeURIComponent(id)}`);
+    const res = await fetch(apiUrl(`/api/geometry/${encodeURIComponent(id)}`));
     if (!res.ok) throw new Error((await res.json()).detail || `HTTP ${res.status}`);
     const geo = await res.json();
     if (state.routeId !== id) return;
@@ -556,7 +578,7 @@ function updateTrail(p) {
 async function loadTrails() {
   if (!state.filter.trails) return;
   try {
-    const res = await fetch("/api/trails");
+    const res = await fetch(apiUrl("/api/trails"));
     if (!res.ok) return;
     const data = await res.json();
     for (const [id, pts] of Object.entries(data.trails || {})) {
@@ -758,7 +780,7 @@ function pumpThin() {
   while (state.geoActive < GEO_MAX_ACTIVE && state.geoQueue.length) {
     const id = state.geoQueue.shift();
     state.geoActive++;
-    fetch(`/api/geometry/${encodeURIComponent(id)}`)
+    fetch(apiUrl(`/api/geometry/${encodeURIComponent(id)}`))
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((geo) => {
         state.geoCache.set(id, simplifyLatLngs(geo.coordinates || []));
@@ -822,8 +844,7 @@ function setStatus(kind, text) {
 let socket = null;
 
 function connect() {
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  socket = new WebSocket(`${proto}://${location.host}/ws`);
+  socket = new WebSocket(websocketUrl());
 
   socket.onopen = () => {
     setStatus("live", "live verbunden");
@@ -862,7 +883,7 @@ function connect() {
 
 async function loadCatalog(retry = 0) {
   try {
-    const res = await fetch("/api/catalog");
+    const res = await fetch(apiUrl("/api/catalog"));
     const data = await res.json();
     if (data.lines && data.lines.length) {
       buildColorIndex(data.lines);
@@ -897,7 +918,7 @@ function flushRegions() {
 
 async function loadRegions(retry = 0) {
   try {
-    const res = await fetch("/api/regions");
+    const res = await fetch(apiUrl("/api/regions"));
     const data = await res.json();
     state.adminToRegion = data.adminToRegion || {};
     const names = Object.keys(data.regions || {}).sort();

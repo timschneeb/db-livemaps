@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -73,6 +74,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Zuglage", lifespan=lifespan)
+
+# Das statische Frontend auf GitHub Pages spricht die API unter einer anderen
+# Origin an. Alle Endpunkte sind oeffentliche, schreibgeschuetzte Daten.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
 
 
 @app.middleware("http")

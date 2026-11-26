@@ -2,7 +2,11 @@
 
 ![screenshot](docs/screenshot.png)
 
+**Live map: <https://timschneeb.github.io/db-livemaps/>**
+
 Unofficial live map of trains across the German railway network based on GPS data.
+The GitHub Pages deployment is the primary frontend. It is a static site and talks
+to the API/WebSocket backend at <https://db-map.timschneeberger.me>.
 
 ## Start
 
@@ -21,6 +25,11 @@ python3 probe/gps_dump.py --duration 60 --out positions.jsonl
 ```
 
 ## Deployment
+
+The frontend in `web/` is deployed to GitHub Pages automatically on every push
+to `main` by `.github/workflows/pages.yml`.
+
+The backend is deployed with:
 
 ```bash
 ./deploy/deploy.sh [ssh-host]
