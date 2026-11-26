@@ -5,8 +5,7 @@
 **Live map: <https://timschneeb.github.io/db-livemaps/>**
 
 Unofficial live map of trains across the German railway network based on GPS data.
-The GitHub Pages deployment is the primary frontend. It is a static site and talks
-to the API/WebSocket backend at <https://db-map.timschneeberger.me>.
+The GitHub Pages deployment is the primary frontend.
 
 ## Start
 
