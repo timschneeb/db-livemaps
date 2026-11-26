@@ -374,9 +374,8 @@ function drawLabels() {
     const nameW = labelCtx.measureText(name).width;
     labelCtx.font = LABEL_FONT_SPEED;
     const speedW = speed ? labelCtx.measureText(speed).width : 0;
-    const gap = speed ? 4 : 0;
-    const boxW = nameW + gap + speedW + 6;
-    const boxH = 14;
+    const boxW = Math.max(nameW, speedW) + 6;
+    const boxH = speed ? 23 : 14;
 
     /* Rechts neben den Punkt; wenn dort kein Platz ist, nach links. */
     let x = it.x + r + 5;
@@ -402,20 +401,21 @@ function drawLabels() {
     boxes.push({ x, y, w: boxW, h: boxH });
     drawn++;
 
-    /* Weißer Halo hält den Namen auch auf hellen Karten lesbar. */
-    let tx = x + 3;
+    /* Weißer Halo hält den Namen auch auf hellen Karten lesbar.
+       Die Geschwindigkeit steht in einer zweiten, kleineren Zeile darunter. */
+    const tx = x + 3;
+    const nameY = speed ? it.y - 5.5 : it.y;
     labelCtx.font = LABEL_FONT_NAME;
     labelCtx.lineWidth = 3;
     labelCtx.strokeStyle = "rgba(255, 255, 255, 0.92)";
-    labelCtx.strokeText(name, tx, it.y);
+    labelCtx.strokeText(name, tx, nameY);
     labelCtx.fillStyle = "#0f172a";
-    labelCtx.fillText(name, tx, it.y);
+    labelCtx.fillText(name, tx, nameY);
     if (speed) {
-      tx += nameW + gap;
       labelCtx.font = LABEL_FONT_SPEED;
-      labelCtx.strokeText(speed, tx, it.y);
+      labelCtx.strokeText(speed, tx, it.y + 6);
       labelCtx.fillStyle = "#475569";
-      labelCtx.fillText(speed, tx, it.y);
+      labelCtx.fillText(speed, tx, it.y + 6);
     }
   }
 }
