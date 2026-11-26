@@ -28,7 +28,7 @@ const CATS = [
 ];
 
 const map = L.map("map", { zoomControl: false, preferCanvas: true })
-  .setView([51.16, 10.45], 6);
+  .setView([51.16, 10.45], 7);
 
 /* Nur auf Geräten mit echten Hover-Eingaben Tooltips anbinden. */
 const canHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -260,7 +260,7 @@ async function loadRoute(id) {
     const geo = await res.json();
     if (state.routeId !== id) return;
     drawRoute(geo.coordinates, colorFor(p || {}));
-    setHint(`${geo.coordinates.length} Streckenpunkte`);
+    setHint("Strecke angezeigt");
   } catch (err) {
     if (state.routeId === id) state.routeId = null;
     setHint(`Keine Streckendaten (${err.message})`, true);
