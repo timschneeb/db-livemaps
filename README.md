@@ -14,10 +14,6 @@ python3 -m venv .venv
 
 Then open <http://127.0.0.1:8000>.
 
-Der Standort-Button (oben rechts) nutzt die Browser-Geolocation. Browser
-erlauben das nur auf `localhost` oder über HTTPS. Auf einer reinen
-HTTP-Adresse im LAN zeigt die App einen entsprechenden Hinweis.
-
 Dump data without server:
 
 ```bash
@@ -27,7 +23,7 @@ python3 probe/gps_dump.py --duration 60 --out positions.jsonl
 ## Deployment
 
 ```bash
-./deploy/deploy.sh [ssh-host]   # default: srv1.timschneeberger.me
+./deploy/deploy.sh [ssh-host]
 ```
 
 Copies the app to `/opt/ris-map/app`, creates the virtualenv, installs the
