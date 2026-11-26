@@ -982,7 +982,7 @@ const LocateControl = L.Control.extend({
 
 new LocateControl().addTo(map);
 
-function onLocation(pos) {
+function onLocation(pos, { auto = false } = {}) {
   const { latitude: lat, longitude: lon, accuracy } = pos.coords;
   if (!locate.marker) {
     locate.circle = L.circle([lat, lon], {
@@ -1010,11 +1010,12 @@ function onLocation(pos) {
     locate.marker.setLatLng([lat, lon]);
     locate.circle.setLatLng([lat, lon]).setRadius(accuracy);
   }
-  map.setView([lat, lon], 10, { animate: true });
-  toast("Standort gefunden.");
+  map.setView([lat, lon], 10, { animate: !auto });
+  if (!auto) toast("Standort gefunden.");
 }
 
-function onLocationError(err) {
+function onLocationError(err, { auto = false } = {}) {
+  if (auto) return;
   const text =
     err && err.code === 1
       ? "Standortfreigabe wurde verweigert."
@@ -1024,24 +1025,38 @@ function onLocationError(err) {
   toast(text);
 }
 
-function goToLocation() {
+function goToLocation({ auto = false } = {}) {
   if (!navigator.geolocation) {
-    toast("Dieser Browser unterstützt keine Standortbestimmung.");
+    if (!auto) toast("Dieser Browser unterstützt keine Standortbestimmung.");
     return;
   }
   if (window.isSecureContext === false) {
-    toast("Standort braucht HTTPS (oder localhost).");
+    if (!auto) toast("Standort braucht HTTPS (oder localhost).");
     return;
   }
   /* Zugauswahl zurücksetzen: Ein offenes Popup folgt seinem Zug und würde
-     die Karte sonst gleich wieder dorthin ziehen. */
-  map.closePopup();
-  clearRoute();
-  navigator.geolocation.getCurrentPosition(onLocation, onLocationError, {
-    enableHighAccuracy: true,
-    timeout: 12000,
-    maximumAge: 5000,
-  });
+     die Karte sonst gleich wieder dorthin ziehen. Beim automatischen
+     Zentrieren nach dem Laden gibt es noch keine Auswahl. */
+  if (!auto) {
+    map.closePopup();
+    clearRoute();
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => onLocation(pos, { auto }),
+    (err) => onLocationError(err, { auto }),
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 },
+  );
+}
+
+/* Nur wenn die Freigabe schon erteilt wurde, ohne Nachfrage zentrieren.
+   So erscheint beim ersten Besuch kein ungefragter Berechtigungsdialog. */
+async function autoLocateIfGranted() {
+  if (!navigator.geolocation || !navigator.permissions) return;
+  if (window.isSecureContext === false) return;
+  try {
+    const permission = await navigator.permissions.query({ name: "geolocation" });
+    if (permission.state === "granted") goToLocation({ auto: true });
+  } catch { /* Browser kann den Status nicht abfragen */ }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1052,4 +1067,5 @@ renderChips([]);
 connect();
 loadCatalog();
 loadRegions();
+autoLocateIfGranted();
 
