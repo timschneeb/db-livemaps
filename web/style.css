@@ -229,6 +229,12 @@ input[type="search"]:focus, select:focus {
 
 .stack { display: flex; flex-direction: column; gap: 10px; }
 
+.stack .field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
 .stack label {
   display: flex;
   flex-direction: column;

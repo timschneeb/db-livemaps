@@ -636,6 +636,48 @@ function renderChips(positions) {
 }
 
 let operatorKey = "";
+let pendingOperators = null;
+
+function dropdownMayBeOpen() {
+  if (document.activeElement === el.operator || document.activeElement === el.region) return true;
+  // Auf Mobilgeräten kann der native Auswahldialog offen sein, ohne dass
+  // zuverlässig ein Fokus-Event ankommt. Solange das Panel sichtbar ist,
+  // bleiben die Listen deshalb unverändert.
+  return window.matchMedia("(max-width: 860px)").matches && el.panel.classList.contains("open");
+}
+
+function applyOperators(sorted, key) {
+  const current = el.operator.value;
+  const values = new Set(sorted.map(([name]) => name));
+
+  for (const option of [...el.operator.options]) {
+    if (option.value && !values.has(option.value)) option.remove();
+  }
+
+  const existing = new Map([...el.operator.options].map((o) => [o.value, o]));
+  for (const [name, n] of sorted) {
+    let option = existing.get(name);
+    if (!option) {
+      option = document.createElement("option");
+      option.value = name;
+      existing.set(name, option);
+    }
+    const text = `${name} (${n})`;
+    if (option.textContent !== text) option.textContent = text;
+  }
+
+  for (const [name] of sorted) el.operator.appendChild(existing.get(name));
+
+  if ([...el.operator.options].some((o) => o.value === current)) {
+    el.operator.value = current;
+  } else {
+    el.operator.value = "";
+    state.filter.op = "";
+  }
+  operatorKey = key;
+  pendingOperators = null;
+}
+
 function renderOperators(positions) {
   const counts = new Map();
   for (const p of positions) {
@@ -643,21 +685,23 @@ function renderOperators(positions) {
   }
   const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
   const key = sorted.map(([n]) => n).join("|");
-  if (key === operatorKey) return;
-  operatorKey = key;
-  const current = el.operator.value;
-  el.operator.innerHTML = '<option value="">Alle EVUs</option>';
-  for (const [name, n] of sorted) {
-    const o = document.createElement("option");
-    o.value = name;
-    o.textContent = `${name} (${n})`;
-    el.operator.appendChild(o);
+  if (key === operatorKey) {
+    pendingOperators = null;
+    return;
   }
-  if ([...el.operator.options].some((o) => o.value === current)) {
-    el.operator.value = current;
-  } else {
-    state.filter.op = "";
+  // Während der native Auswahldialog offen ist, keine Optionen anfassen:
+  // Chromium schließt oder verwirrt den Dialog, wenn sich die Liste ändert.
+  if (dropdownMayBeOpen()) {
+    pendingOperators = { sorted, key };
+    return;
   }
+  applyOperators(sorted, key);
+}
+
+function flushOperators() {
+  if (!pendingOperators || dropdownMayBeOpen()) return;
+  const { sorted, key } = pendingOperators;
+  applyOperators(sorted, key);
 }
 
 function reprocess() {
@@ -829,6 +873,28 @@ async function loadCatalog(retry = 0) {
   if (retry < 10) setTimeout(() => loadCatalog(retry + 1), 4000);
 }
 
+let pendingRegions = null;
+
+function applyRegions(names) {
+  const current = el.region.value;
+  el.region.innerHTML = '<option value="">Ganz Deutschland</option>';
+  for (const n of names) {
+    const o = document.createElement("option");
+    o.value = n;
+    o.textContent = n.replaceAll("_", " ");
+    el.region.appendChild(o);
+  }
+  if (current && [...el.region.options].some((o) => o.value === current)) {
+    el.region.value = current;
+  }
+  pendingRegions = null;
+}
+
+function flushRegions() {
+  if (!pendingRegions || dropdownMayBeOpen()) return;
+  applyRegions(pendingRegions);
+}
+
 async function loadRegions(retry = 0) {
   try {
     const res = await fetch("/api/regions");
@@ -836,13 +902,9 @@ async function loadRegions(retry = 0) {
     state.adminToRegion = data.adminToRegion || {};
     const names = Object.keys(data.regions || {}).sort();
     if (names.length) {
-      el.region.innerHTML = '<option value="">Ganz Deutschland</option>';
-      for (const n of names) {
-        const o = document.createElement("option");
-        o.value = n;
-        o.textContent = n.replaceAll("_", " ");
-        el.region.appendChild(o);
-      }
+      // Nicht in eine bereits geöffnete Auswahlliste hineinschreiben.
+      if (dropdownMayBeOpen()) pendingRegions = names;
+      else applyRegions(names);
       return;
     }
   } catch { /* ignore */ }
@@ -862,12 +924,14 @@ el.operator.addEventListener("change", () => {
   state.filter.op = el.operator.value;
   reprocess();
 });
+el.operator.addEventListener("blur", flushOperators);
 
 el.region.addEventListener("change", () => {
   state.filter.region = el.region.value;
   state.fitPending = Boolean(el.region.value);
   reprocess();
 });
+el.region.addEventListener("blur", flushRegions);
 
 el.sensor.addEventListener("change", () => {
   state.filter.sensor = el.sensor.checked;
@@ -892,7 +956,19 @@ el.trails.addEventListener("change", () => {
   }
 });
 
-el.panelToggle.addEventListener("click", () => el.panel.classList.toggle("open"));
+el.panelToggle.addEventListener("click", () => {
+  const opening = !el.panel.classList.contains("open");
+  if (opening) {
+    flushOperators();
+    flushRegions();
+  }
+  el.panel.classList.toggle("open");
+  if (!opening) {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    flushOperators();
+    flushRegions();
+  }
+});
 
 map.on("zoomend", () => {
   const r = radiusForZoom();
