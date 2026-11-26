@@ -49,8 +49,54 @@ function websocketUrl() {
   return `${proto}://${location.host}/ws`;
 }
 
+/* Letzte Kartenansicht merken und beim nächsten Besuch wiederherstellen.
+   Gespeichert wird höchstens Zoom 10, auch wenn weiter hineingezoomt wurde. */
+const VIEW_STORAGE_KEY = "db-livemaps:view";
+const MAX_SAVED_ZOOM = 10;
+
+function loadSavedView() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(VIEW_STORAGE_KEY));
+    if (
+      !saved ||
+      !Number.isFinite(saved.lat) ||
+      !Number.isFinite(saved.lng) ||
+      !Number.isFinite(saved.zoom) ||
+      saved.lat < -90 ||
+      saved.lat > 90 ||
+      saved.lng < -180 ||
+      saved.lng > 180
+    ) {
+      return null;
+    }
+    return {
+      center: [saved.lat, saved.lng],
+      zoom: Math.min(MAX_SAVED_ZOOM, Math.max(0, Math.round(saved.zoom))),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveMapView() {
+  const center = map.getCenter();
+  try {
+    localStorage.setItem(
+      VIEW_STORAGE_KEY,
+      JSON.stringify({
+        lat: center.lat,
+        lng: center.lng,
+        zoom: Math.min(MAX_SAVED_ZOOM, map.getZoom()),
+      }),
+    );
+  } catch { /* Speicher kann im privaten Modus gesperrt sein */ }
+}
+
+const savedView = loadSavedView();
 const map = L.map("map", { zoomControl: false, preferCanvas: true })
-  .setView([51.16, 10.45], 6);
+  .setView(savedView ? savedView.center : [51.16, 10.45], savedView ? savedView.zoom : 6);
+
+map.on("moveend", saveMapView);
 
 /* Nur auf Geräten mit echten Hover-Eingaben Tooltips anbinden. */
 const canHover = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -1076,7 +1122,7 @@ const LocateControl = L.Control.extend({
 
 new LocateControl().addTo(map);
 
-function onLocation(pos, { auto = false } = {}) {
+function onLocation(pos) {
   const { latitude: lat, longitude: lon, accuracy } = pos.coords;
   if (!locate.marker) {
     locate.circle = L.circle([lat, lon], {
@@ -1104,12 +1150,11 @@ function onLocation(pos, { auto = false } = {}) {
     locate.marker.setLatLng([lat, lon]);
     locate.circle.setLatLng([lat, lon]).setRadius(accuracy);
   }
-  map.setView([lat, lon], 10, { animate: !auto });
-  if (!auto) toast("Standort gefunden.");
+  map.setView([lat, lon], 10, { animate: true });
+  toast("Standort gefunden.");
 }
 
-function onLocationError(err, { auto = false } = {}) {
-  if (auto) return;
+function onLocationError(err) {
   const text =
     err && err.code === 1
       ? "Standortfreigabe wurde verweigert."
@@ -1119,38 +1164,24 @@ function onLocationError(err, { auto = false } = {}) {
   toast(text);
 }
 
-function goToLocation({ auto = false } = {}) {
+function goToLocation() {
   if (!navigator.geolocation) {
-    if (!auto) toast("Dieser Browser unterstützt keine Standortbestimmung.");
+    toast("Dieser Browser unterstützt keine Standortbestimmung.");
     return;
   }
   if (window.isSecureContext === false) {
-    if (!auto) toast("Standort braucht HTTPS (oder localhost).");
+    toast("Standort braucht HTTPS (oder localhost).");
     return;
   }
   /* Zugauswahl zurücksetzen: Ein offenes Popup folgt seinem Zug und würde
-     die Karte sonst gleich wieder dorthin ziehen. Beim automatischen
-     Zentrieren nach dem Laden gibt es noch keine Auswahl. */
-  if (!auto) {
-    map.closePopup();
-    clearRoute();
-  }
-  navigator.geolocation.getCurrentPosition(
-    (pos) => onLocation(pos, { auto }),
-    (err) => onLocationError(err, { auto }),
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 },
-  );
-}
-
-/* Nur wenn die Freigabe schon erteilt wurde, ohne Nachfrage zentrieren.
-   So erscheint beim ersten Besuch kein ungefragter Berechtigungsdialog. */
-async function autoLocateIfGranted() {
-  if (!navigator.geolocation || !navigator.permissions) return;
-  if (window.isSecureContext === false) return;
-  try {
-    const permission = await navigator.permissions.query({ name: "geolocation" });
-    if (permission.state === "granted") goToLocation({ auto: true });
-  } catch { /* Browser kann den Status nicht abfragen */ }
+     die Karte sonst gleich wieder dorthin ziehen. */
+  map.closePopup();
+  clearRoute();
+  navigator.geolocation.getCurrentPosition(onLocation, onLocationError, {
+    enableHighAccuracy: true,
+    timeout: 12000,
+    maximumAge: 5000,
+  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -1161,5 +1192,4 @@ renderChips([]);
 connect();
 loadCatalog();
 loadRegions();
-autoLocateIfGranted();
 
