@@ -71,18 +71,20 @@ html, body {
   overflow: hidden;
 }
 
-.locate-control a {
-  display: grid !important;
+.locate-control button {
+  display: grid;
   place-items: center;
   width: 30px;
   height: 30px;
-  color: var(--ink) !important;
-  background: #fff !important;
+  padding: 0;
+  border: 0;
+  color: var(--ink);
+  background: #fff;
+  cursor: pointer;
 }
 
-.locate-control a.active {
-  color: #fff !important;
-  background: #2563eb !important;
+.locate-control button:hover {
+  background: #f8fafc;
 }
 
 /* Karten-Controls nicht hinter dem Panel bzw. dem Filter-Button verstecken */

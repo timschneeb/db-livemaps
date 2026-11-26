@@ -943,7 +943,7 @@ document.addEventListener("keydown", (e) => {
 /* Eigener Standort                                                    */
 /* ------------------------------------------------------------------ */
 
-const locate = { watchId: null, marker: null, circle: null, first: true };
+const locate = { marker: null, circle: null };
 let toastTimer = null;
 
 function toast(text, ms = 4500) {
@@ -959,11 +959,10 @@ const LocateControl = L.Control.extend({
   options: { position: "topright" },
   onAdd() {
     const wrap = L.DomUtil.create("div", "leaflet-bar locate-control");
-    const btn = L.DomUtil.create("a", "", wrap);
-    btn.href = "#";
-    btn.title = "Eigene Position anzeigen";
-    btn.setAttribute("role", "button");
-    btn.setAttribute("aria-label", "Eigene Position anzeigen");
+    const btn = L.DomUtil.create("button", "", wrap);
+    btn.type = "button";
+    btn.title = "Zum eigenen Standort";
+    btn.setAttribute("aria-label", "Zum eigenen Standort");
     btn.innerHTML =
       '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">' +
       '<path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A9.01 ' +
@@ -975,16 +974,13 @@ const LocateControl = L.Control.extend({
     L.DomEvent.disableScrollPropagation(wrap);
     L.DomEvent.on(btn, "click", (e) => {
       L.DomEvent.preventDefault(e);
-      toggleLocate();
+      goToLocation();
     });
     return wrap;
   },
-  setActive(on) {
-    if (this._btn) this._btn.classList.toggle("active", Boolean(on));
-  },
 });
 
-const locateControl = new LocateControl().addTo(map);
+new LocateControl().addTo(map);
 
 function onLocation(pos) {
   const { latitude: lat, longitude: lon, accuracy } = pos.coords;
@@ -1014,11 +1010,8 @@ function onLocation(pos) {
     locate.marker.setLatLng([lat, lon]);
     locate.circle.setLatLng([lat, lon]).setRadius(accuracy);
   }
-  if (locate.first) {
-    locate.first = false;
-    map.setView([lat, lon], Math.max(map.getZoom(), 13), { animate: true });
-    toast("Standort gefunden.");
-  }
+  map.setView([lat, lon], 10, { animate: true });
+  toast("Standort gefunden.");
 }
 
 function onLocationError(err) {
@@ -1029,31 +1022,9 @@ function onLocationError(err) {
         ? "Standortbestimmung dauert zu lange."
         : "Standort konnte nicht bestimmt werden.";
   toast(text);
-  stopLocate();
 }
 
-function stopLocate() {
-  if (locate.watchId != null && navigator.geolocation) {
-    navigator.geolocation.clearWatch(locate.watchId);
-  }
-  locate.watchId = null;
-  locate.first = true;
-  locateControl.setActive(false);
-  if (locate.marker) {
-    map.removeLayer(locate.marker);
-    locate.marker = null;
-  }
-  if (locate.circle) {
-    map.removeLayer(locate.circle);
-    locate.circle = null;
-  }
-}
-
-function toggleLocate() {
-  if (locate.watchId != null) {
-    stopLocate();
-    return;
-  }
+function goToLocation() {
   if (!navigator.geolocation) {
     toast("Dieser Browser unterstützt keine Standortbestimmung.");
     return;
@@ -1062,13 +1033,15 @@ function toggleLocate() {
     toast("Standort braucht HTTPS (oder localhost).");
     return;
   }
-  locate.first = true;
-  locateControl.setActive(true);
-  locate.watchId = navigator.geolocation.watchPosition(
-    onLocation,
-    onLocationError,
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 },
-  );
+  /* Zugauswahl zurücksetzen: Ein offenes Popup folgt seinem Zug und würde
+     die Karte sonst gleich wieder dorthin ziehen. */
+  map.closePopup();
+  clearRoute();
+  navigator.geolocation.getCurrentPosition(onLocation, onLocationError, {
+    enableHighAccuracy: true,
+    timeout: 12000,
+    maximumAge: 5000,
+  });
 }
 
 /* ------------------------------------------------------------------ */
